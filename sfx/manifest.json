@@ -1,0 +1,20 @@
+{
+  "provenance": "World War Web audio pipeline (Stable Audio 3 MLX sm-sfx generated SFX). Copied 2026-07-16 from /Users/boneshaman/Documents/WorldWarWeb/assets/sfx per docs/audio_creation_workflow.md.",
+  "renames": {
+    "shot_rifle_0[1-3]": "combat/rifle_gunfire_0[1-3]",
+    "shot_cannon_0[1-2]": "combat/cannon_0[1-2]",
+    "impact_flesh_0[1-2]": "combat/impact_armor_0[1-2]",
+    "impact_ground_01": "combat/impact_ground_01",
+    "void_blast_0[1-2]": "combat/explosion_small_0[1-2]",
+    "overrun_01": "combat/explosion_large_01",
+    "drop_landing_01": "pods/space_landing_01",
+    "buy_0[1-2]": "ui/build_purchase_0[1-2]",
+    "perk_up_01": "ui/power_up_01",
+    "denied_01": "ui/queue_cancel_01",
+    "confirm_01": "ui/menu_confirm_01",
+    "click_0[1-2]": "ui/select_0[1-2]",
+    "victory_01": "ui/victory_01",
+    "defeat_01": "ui/defeat_01"
+  },
+  "doctrine": "Per-cue low starting gain, per-key maxConcurrent, shared master compressor. Synth remains the fallback lane; files are the primary combat lane."
+}

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>ZAWG 3D — HOPE Field Deployment</title>
+<meta name="description" content="First-person round-based zombies survival in the browser. Nine sectors, hive nests, pack-a-punch, split-screen co-op — or play the outbreak itself as the HILTAI director. Free, no install." />
+<meta property="og:title" content="ZAWG 3D — HOPE Field Deployment" />
+<meta property="og:description" content="Browser FPS zombies survival: nine sectors, mystery box, pack-a-punch, split-screen co-op, full controller support — or switch sides and direct the outbreak. Free, no install." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://boneshaman.github.io/zawg3d-play/" />
+<meta property="og:image" content="https://boneshaman.github.io/zawg3d-play/share.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="ZAWG 3D — HOPE Field Deployment" />
+<meta name="twitter:description" content="Browser FPS zombies survival — or play the outbreak itself. Free, no install." />
+<meta name="twitter:image" content="https://boneshaman.github.io/zawg3d-play/share.png" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23070b12'/%3E%3Ctext x='32' y='46' font-family='monospace' font-size='42' font-weight='bold' text-anchor='middle' fill='%237ce8ff'%3EZ%3C/text%3E%3C/svg%3E" />
+<style>
+  :root {
+    --ink: #05070d;
+    --panel: #0b1120;
+    --hope: #7ce8ff;
+    --hope-dim: #93c5fd;
+    --hiltai: #ff9ca8;
+    --field: #ffd166;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); }
+  body { font-family: "Courier New", ui-monospace, monospace; color: var(--hope); user-select: none; }
+  #app { position: fixed; inset: 0; }
+  canvas.webgl { display: block; }
+
+  .hud { position: fixed; pointer-events: none; z-index: 10; }
+
+  #crosshair {
+    left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 14px; height: 14px; opacity: 0.9;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute; background: var(--hope);
+  }
+  #crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  #crosshair::after { left: 0; top: 6px; width: 14px; height: 2px; }
+
+  #hitmarker {
+    left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(45deg);
+    width: 22px; height: 22px; opacity: 0; transition: opacity 0.08s;
+  }
+  #hitmarker::before, #hitmarker::after { content: ""; position: absolute; background: #fff; }
+  #hitmarker::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #hitmarker::after { left: 0; top: 10px; width: 22px; height: 2px; }
+  #hitmarker.kill::before, #hitmarker.kill::after { background: var(--hiltai); }
+
+  #vignette {
+    inset: 0; opacity: 0; transition: opacity 0.25s;
+    background: radial-gradient(ellipse at center, transparent 42%, rgba(255, 30, 40, 0.55) 100%);
+  }
+
+  #topbar {
+    top: 14px; left: 50%; transform: translateX(-50%);
+    text-align: center; letter-spacing: 2px;
+  }
+  #topbar .round { font-size: 30px; color: var(--hiltai); text-shadow: 0 0 12px rgba(255,156,168,0.6); }
+  #topbar .objective { font-size: 11px; color: var(--hope-dim); margin-top: 2px; }
+
+  #points {
+    left: 22px; bottom: 88px; font-size: 24px; color: var(--field);
+    text-shadow: 0 0 10px rgba(255,209,102,0.45);
+  }
+  #pointsFeed { left: 22px; bottom: 120px; font-size: 13px; color: var(--field); opacity: 0.9; }
+  #pointsFeed div { margin-top: 2px; animation: feedUp 0.9s forwards; }
+  @keyframes feedUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-16px); } }
+
+  #health { left: 22px; bottom: 56px; width: 220px; height: 10px; background: rgba(124,232,255,0.12); border: 1px solid rgba(124,232,255,0.35); }
+  #health .fill { height: 100%; width: 100%; background: var(--hope); transition: width 0.15s; }
+
+  #ammo { right: 22px; bottom: 52px; text-align: right; }
+  #ammo .weapon { font-size: 13px; color: var(--hope-dim); letter-spacing: 2px; }
+  #ammo .count { font-size: 30px; color: var(--hope); }
+  #ammo .count .reserve { font-size: 16px; color: var(--hope-dim); }
+  #ammo .reloading { font-size: 11px; color: var(--field); height: 14px; }
+
+  #prompt {
+    left: 50%; bottom: 26%; transform: translateX(-50%);
+    font-size: 15px; color: var(--field); letter-spacing: 1px;
+    text-shadow: 0 0 8px rgba(0,0,0,0.9); text-align: center;
+  }
+
+  #toasts { left: 50%; top: 72px; transform: translateX(-50%); text-align: center; width: 90%; }
+  #toasts .toast { font-size: 14px; letter-spacing: 1px; margin-top: 4px; text-shadow: 0 0 8px rgba(0,0,0,0.9); animation: toastIn 0.18s; }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(-6px); } }
+  .spk-SYSTEM { color: #9aa7bd; } .spk-HOPE { color: var(--hope); }
+  .spk-HILTAI { color: var(--hiltai); } .spk-FIELD { color: var(--field); }
+
+  #minimap { right: 16px; top: 16px; border: 1px solid rgba(124,232,255,0.35); background: rgba(5,7,13,0.72); }
+
+  #dash { left: 22px; bottom: 36px; width: 120px; height: 5px; background: rgba(255,209,102,0.12); border: 1px solid rgba(255,209,102,0.3); }
+  #dash .fill { height: 100%; width: 100%; background: var(--field); }
+
+  .screen {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: radial-gradient(ellipse at center, rgba(11,17,32,0.72), rgba(5,7,13,0.95));
+    pointer-events: auto; overflow: hidden;
+  }
+  .screen::after { /* scanlines */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.22) 0 1px, transparent 1px 3px);
+    mix-blend-mode: multiply;
+  }
+  .screen h1 { font-size: 54px; letter-spacing: 10px; color: var(--hope); text-shadow: 0 0 24px rgba(124,232,255,0.5); }
+  .screen h2 { font-size: 15px; letter-spacing: 4px; color: var(--hiltai); margin-top: 8px; }
+  .screen p { font-size: 13px; color: var(--hope-dim); margin-top: 22px; line-height: 1.9; }
+  .screen .go { margin-top: 30px; font-size: 16px; color: var(--field); letter-spacing: 2px; animation: pulse 1.4s infinite; cursor: pointer; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .hidden { display: none !important; }
+
+  /* ---- title ---- */
+  .logo {
+    position: relative; font-size: 96px; font-weight: bold; letter-spacing: 22px;
+    color: var(--hope); text-shadow: 0 0 40px rgba(124,232,255,0.55), 0 0 8px rgba(124,232,255,0.9);
+    animation: logoFloat 5s ease-in-out infinite;
+    user-select: none;
+  }
+  .logo::before, .logo::after {
+    content: "ZAWG"; position: absolute; left: 0; top: 0; width: 100%;
+  }
+  .logo::before { color: var(--hiltai); z-index: -1; animation: glitchA 3.1s steps(1) infinite; opacity: 0.8; }
+  .logo::after { color: #b08cff; z-index: -2; animation: glitchB 4.3s steps(1) infinite; opacity: 0.6; }
+  @keyframes logoFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  @keyframes glitchA {
+    0%, 92% { transform: translate(0,0); clip-path: inset(0 0 0 0); }
+    93% { transform: translate(-5px,2px); clip-path: inset(10% 0 55% 0); }
+    95% { transform: translate(4px,-2px); clip-path: inset(60% 0 8% 0); }
+    97% { transform: translate(-3px,1px); clip-path: inset(30% 0 40% 0); }
+    98% { transform: translate(0,0); clip-path: inset(0 0 0 0); }
+  }
+  @keyframes glitchB {
+    0%, 88% { transform: translate(0,0); opacity: 0; }
+    89% { transform: translate(6px,-3px); opacity: 0.6; clip-path: inset(40% 0 20% 0); }
+    92% { transform: translate(-6px,3px); opacity: 0.6; clip-path: inset(5% 0 70% 0); }
+    94% { transform: translate(0,0); opacity: 0; }
+  }
+  .tagline { font-size: 13px; letter-spacing: 6px; color: var(--hope-dim); margin-top: 4px; }
+  .tagline .vs { color: var(--hiltai); }
+
+  .doctrines { display: flex; gap: 26px; margin-top: 40px; }
+  .card {
+    width: 250px; padding: 22px 20px 18px; cursor: pointer; text-align: left;
+    border: 1px solid rgba(124,232,255,0.28); background: rgba(11,17,32,0.72);
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    position: relative;
+  }
+  .card:hover { transform: translateY(-4px); }
+  .card .k { font-size: 10px; letter-spacing: 3px; opacity: 0.65; }
+  .card .n { font-size: 19px; letter-spacing: 2px; margin-top: 6px; }
+  .card .d { font-size: 11px; line-height: 1.75; margin-top: 12px; opacity: 0.75; }
+  .card .cta { font-size: 12px; letter-spacing: 2px; margin-top: 16px; animation: pulse 1.6s infinite; }
+  .card.hope { color: var(--hope); }
+  .card.hope:hover { border-color: var(--hope); box-shadow: 0 0 34px rgba(124,232,255,0.28), inset 0 0 24px rgba(124,232,255,0.05); }
+  .card.hiltai { color: var(--hiltai); border-color: rgba(255,156,168,0.28); }
+  .card.hiltai:hover { border-color: var(--hiltai); box-shadow: 0 0 34px rgba(255,156,168,0.3), inset 0 0 24px rgba(255,156,168,0.06); }
+  .card.coop { color: var(--field); border-color: rgba(255,209,102,0.28); }
+  .card.coop:hover { border-color: var(--field); box-shadow: 0 0 34px rgba(255,209,102,0.3), inset 0 0 24px rgba(255,209,102,0.06); }
+  .card.focus { transform: translateY(-4px); border-color: currentColor;
+    box-shadow: 0 0 34px rgba(124,232,255,0.3), inset 0 0 24px rgba(124,232,255,0.06); }
+  #pauseScreen .btn.focus { border-color: currentColor; box-shadow: 0 0 22px rgba(124,232,255,0.3); }
+  .go.focus { outline: 1px solid currentColor; outline-offset: 6px; text-shadow: 0 0 14px currentColor; animation: none; opacity: 1; }
+  .card::before {
+    content: ""; position: absolute; top: -1px; left: -1px; width: 14px; height: 14px;
+    border-top: 2px solid currentColor; border-left: 2px solid currentColor;
+  }
+  .card::after {
+    content: ""; position: absolute; bottom: -1px; right: -1px; width: 14px; height: 14px;
+    border-bottom: 2px solid currentColor; border-right: 2px solid currentColor;
+  }
+  .controlsline { margin-top: 34px !important; font-size: 11px !important; opacity: 0.65; }
+
+  .hook {
+    margin-top: 18px; font-size: 14px; letter-spacing: 2px; color: #ffd166;
+    min-height: 20px; text-shadow: 0 0 12px rgba(255,209,102,0.35);
+    animation: hookFlicker 4s infinite;
+  }
+  @keyframes hookFlicker { 0%,100% { opacity: 1; } 48% { opacity: 1; } 50% { opacity: 0.55; } 52% { opacity: 1; } 82% { opacity: 1; } 83% { opacity: 0.7; } 84% { opacity: 1; } }
+  .bestline { margin-top: 8px !important; font-size: 11px !important; color: #ff9ca8 !important; letter-spacing: 2px; }
+
+  #controlsStrip {
+    left: 50%; bottom: 8px; transform: translateX(-50%);
+    font-size: 10px; color: rgba(147,197,253,0.55); letter-spacing: 1px; white-space: nowrap;
+  }
+
+  #pauseScreen .btn {
+    margin-top: 16px; font-size: 15px; letter-spacing: 3px; color: var(--hope);
+    border: 1px solid rgba(124,232,255,0.3); padding: 10px 34px; cursor: pointer;
+  }
+  #pauseScreen .btn:hover { border-color: var(--hope); box-shadow: 0 0 22px rgba(124,232,255,0.25); }
+  #pauseScreen .btn.red { color: var(--hiltai); border-color: rgba(255,156,168,0.3); }
+  #pauseScreen .btn.red:hover { border-color: var(--hiltai); box-shadow: 0 0 22px rgba(255,156,168,0.25); }
+  #pauseScreen .setrow {
+    display: flex; align-items: center; gap: 12px; margin-top: 10px;
+    font-size: 12px; letter-spacing: 2px; color: var(--hope-dim);
+    border: 1px solid transparent; padding: 4px 14px; cursor: pointer;
+  }
+  #pauseScreen .setrow.focus, #pauseScreen .setrow:hover { border-color: rgba(124,232,255,0.35); color: var(--hope); }
+  #pauseScreen .setrow label { width: 130px; text-align: right; cursor: pointer; }
+  #pauseScreen .setrow input[type=range] { width: 150px; accent-color: #7ce8ff; cursor: pointer; }
+  #pauseScreen .setrow .val { width: 44px; text-align: left; color: var(--hope); font-family: monospace; }
+  #pauseScreen .sethead { margin-top: 22px; font-size: 11px; letter-spacing: 4px; color: rgba(147,197,253,0.5); }
+
+  #prepHint { left: 50%; bottom: 40px; transform: translateX(-50%); font-size: 13px; color: var(--hope-dim); letter-spacing: 1px; text-align: center; }
+
+  /* ---- mobile: stack the doctrine cards, scale the logo, ditch KB/pad hints ---- */
+  @media (max-width: 760px), (max-height: 500px) {
+    .screen { justify-content: flex-start; overflow-y: auto; padding: 26px 0 40px; }
+    .logo { font-size: 52px; letter-spacing: 12px; }
+    .tagline { font-size: 10px; letter-spacing: 3px; padding: 0 12px; }
+    .doctrines { flex-direction: column; gap: 12px; margin-top: 20px; width: 88vw; }
+    .card { width: auto; padding: 14px 18px; }
+    .card .d { margin-top: 8px; line-height: 1.5; }
+    .card .cta { margin-top: 10px; }
+    .controlsline { display: none; }
+    .hook { margin-top: 12px; font-size: 12px; }
+    .screen h1 { font-size: 30px; letter-spacing: 6px; }
+    #pauseScreen .btn { margin-top: 10px; padding: 8px 24px; font-size: 13px; }
+    #pauseScreen .setrow label { width: 96px; font-size: 10px; }
+    #pauseScreen .setrow input[type=range] { width: 110px; }
+    /* HUD: shrink the map, push text out of its lane, lift the bars clear
+       of the touch stick / fire cluster */
+    #minimap { width: 96px; height: 80px; right: 8px; top: 8px; }
+    #topbar { top: 6px; left: 8px; transform: none; text-align: left; max-width: 62vw; }
+    #topbar .round { font-size: 17px; }
+    #topbar .objective { font-size: 9px; }
+    #toasts { top: 58px; left: 8px; transform: none; text-align: left; width: 64vw; }
+    #toasts .toast { font-size: 10px; margin-top: 2px; }
+    #prompt { bottom: 40%; font-size: 11px; width: 84vw; }
+    #points { left: 8px; bottom: 218px; font-size: 18px; }
+    #pointsFeed { left: 8px; bottom: 244px; font-size: 10px; }
+    #health { left: 8px; bottom: 200px; width: 130px; height: 7px; }
+    #dash { left: 8px; bottom: 188px; width: 130px; }
+    #ammo { right: 8px; top: 96px; bottom: auto; }
+    #ammo .count { font-size: 20px; }
+    #ammo .weapon { font-size: 10px; }
+    #controlsStrip { display: none; }
+    #prepHint { bottom: 12px; font-size: 10px; width: 92vw; }
+  }
+</style>
+  <script type="module" crossorigin src="./assets/index-BaO-miAN.js"></script>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="hud" id="vignette"></div>
+<div class="hud" id="crosshair"></div>
+<div class="hud" id="hitmarker"></div>
+<div class="hud" id="topbar"><div class="round">ROUND 1</div><div class="objective">HOPE FIELD DEPLOYMENT</div><div id="powerupLine" style="font-size:12px;color:#ffd166;letter-spacing:2px;margin-top:3px;text-shadow:0 0 10px rgba(255,209,102,0.6)"></div></div>
+<div class="hud" id="pointsFeed"></div>
+<div class="hud" id="points">0</div>
+<div class="hud" id="health"><div class="fill"></div></div>
+<div class="hud" id="dash"><div class="fill"></div></div>
+<div class="hud" id="ammo"><div class="reloading"></div><div class="weapon">BLASTER</div><div class="count">8 <span class="reserve">/ &#8734;</span></div></div>
+<div class="hud" id="prompt"></div>
+<div class="hud" id="toasts"></div>
+<canvas class="hud" id="minimap" width="180" height="150"></canvas>
+<div class="hud" id="prepHint"></div>
+
+<div class="screen" id="titleScreen">
+  <div class="logo">ZAWG</div>
+  <div class="tagline">HOPE <span class="vs">vs</span> HILTAI &mdash; NINE SECTORS &middot; ONE ANOMALY &middot; TWO TRUTHS</div>
+  <div class="doctrines">
+    <div class="card hope" id="startBtn">
+      <div class="k">DOCTRINE 01</div>
+      <div class="n">HOPE FIELD DEPLOYMENT</div>
+      <div class="d">Read the field. Claim a sector. Drop into the anomaly and hold three rounds until containment closes. First-person.</div>
+      <div class="cta">&#9654; DEPLOY</div>
+    </div>
+    <div class="card hiltai" id="hiltaiBtn">
+      <div class="k">DOCTRINE 02</div>
+      <div class="n">HILTAI DIRECTOR PROTOCOL</div>
+      <div class="d">You are the outbreak. Spend threat, seed the hives, and break the seven-shooter HOPE task force before the window closes.</div>
+      <div class="cta">&#9654; ASSUME CONTROL</div>
+    </div>
+    <div class="card coop" id="coopBtn">
+      <div class="k">TWO OPERATIVES</div>
+      <div class="n">LOCAL CO-OP</div>
+      <div class="d">Split-screen HOPE deployment. Keyboard+mouse and a controller — or two controllers. Downed partners return next round.</div>
+      <div class="cta">&#9654; SQUAD UP</div>
+    </div>
+  </div>
+  <div class="hook" id="titleHook">THE HIVE IS ALREADY INSIDE.</div>
+  <p id="soundHint" style="margin-top:10px;font-size:11px;letter-spacing:2px;color:#9aa7bd">&#128264; SOUND ARMS ON YOUR FIRST TAP &middot; CLICK &middot; KEYPRESS &mdash; controllers can't wake the speakers</p>
+  <p class="bestline" id="bestLine"></p>
+  <p class="controlsline">HOPE &mdash; WASD &middot; mouse aim &middot; click fire &middot; RIGHT-CLICK aim &middot; R reload &middot; F knife &middot; SPACE jump &middot; Q dash &middot; SHIFT sprint &middot; E interact &middot; 1/2 swap
+  &nbsp;&nbsp;&#124;&nbsp;&nbsp; HILTAI &mdash; WASD pan &middot; scroll zoom &middot; click sector &middot; E hive &middot; 1-4 doctrine &middot; SPACE deploy &nbsp;&nbsp;&#124;&nbsp;&nbsp; ESC pause &middot; M mute<br/>
+  XBOX PAD &mdash; sticks move/look &middot; RT fire &middot; LT aim &middot; A jump &middot; B dash &middot; X reload &middot; RB interact &middot; START pause
+  &nbsp;&nbsp;&#124;&nbsp;&nbsp; CO-OP &mdash; press C (or pad Y) with a controller connected</p>
+</div>
+
+<div class="screen" id="loadScreen" style="z-index:30">
+  <h1 style="font-size:34px;letter-spacing:8px">SYNCING HIVE DATA</h1>
+  <h2 id="loadBar" style="font-family:monospace;letter-spacing:2px">&#9646;&#9646;&#9646;&#9647;&#9647;&#9647;&#9647;&#9647;&#9647;&#9647;</h2>
+  <p id="loadTip">The anomaly holds two truths.</p>
+</div>
+
+<div class="screen hidden" id="pauseScreen">
+  <h1 style="font-size:40px">PAUSED</h1>
+  <h2>CONTAINMENT SUSPENDED</h2>
+  <div class="btn" id="resumeBtn">RESUME</div>
+  <div class="btn" id="restartBtn">RESTART DEPLOYMENT</div>
+  <div class="sethead">SETTINGS &mdash; d-pad &#9650;&#9660; select &middot; &#9664;&#9654; adjust</div>
+  <div class="setrow" id="set-mouseSens"><label>MOUSE SENS</label><input type="range" min="0.3" max="2.5" step="0.1"><span class="val"></span></div>
+  <div class="setrow" id="set-padSens"><label>PAD AIM SENS</label><input type="range" min="0.3" max="2.5" step="0.1"><span class="val"></span></div>
+  <div class="setrow" id="set-invertY"><label>PAD INVERT Y</label><input type="checkbox" style="accent-color:#7ce8ff;width:16px;height:16px;cursor:pointer"><span class="val"></span></div>
+  <div class="setrow" id="set-sfx"><label>SFX VOLUME</label><input type="range" min="0" max="1.5" step="0.1"><span class="val"></span></div>
+  <div class="setrow" id="set-music"><label>MUSIC VOLUME</label><input type="range" min="0" max="1.5" step="0.1"><span class="val"></span></div>
+  <div class="btn red" id="quitBtn">RETURN TO TITLE</div>
+</div>
+
+<div class="screen hidden" id="endScreen">
+  <h1 id="endTitle">FIELD LOST</h1>
+  <h2 id="endSub"></h2>
+  <p id="endStats"></p>
+  <div class="go hidden" id="endlessBtn" style="color:#ff9ca8">[ HOLD THE LINE — ENDLESS ]</div>
+  <div class="go hidden" id="clearanceBtn" style="color:#ff9ca8">[ RAISE CLEARANCE — TIER 2 ]</div>
+  <div class="go" id="endBtn">[ REDEPLOY ]</div>
+  <div class="go" id="endTitleBtn" style="color:#93c5fd">[ RETURN TO TITLE ]</div>
+</div>
+
+<div class="hud" id="controlsStrip"></div>
+<div class="hud" id="p2prompt" style="left:75%;bottom:30%;transform:translateX(-50%);font-size:12px;color:#ffb347;letter-spacing:1px;text-shadow:0 0 8px rgba(0,0,0,0.9);text-align:center"></div>
+<div class="hud hidden" id="p2hud" style="right:22px;top:176px;text-align:right">
+  <div style="font-size:11px;color:#ffb347;letter-spacing:2px">P2</div>
+  <div style="width:150px;height:8px;border:1px solid rgba(255,179,71,0.4);background:rgba(255,179,71,0.1);margin-top:3px">
+    <div class="fill" style="height:100%;width:100%;background:#ffb347"></div>
+  </div>
+  <div class="ammo" style="font-size:11px;color:#ffb347;margin-top:3px"></div>
+</div>
+
+</body>
+</html>
